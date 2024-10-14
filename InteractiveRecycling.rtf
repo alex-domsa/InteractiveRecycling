@@ -1,0 +1,472 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2761
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 int playerX, playerY;  // Player coordinates\
+float playerSpeed;       // Player speed\
+int currency;          // In-game currency\
+int recyclableCount, nonRecyclableCount;  // Counters for rubbish types\
+int gameTimer;         // Game timer\
+boolean gameOver;      // Flag to indicate if the game is over\
+ArrayList<Rubbish> rubbishList;\
+\
+boolean inShop;        // Flag to indicate if the player is in the shop\
+int speedUpgradeCost;  // Cost of the speed upgrade\
+int cosmeticUpgradeCost;  // Cost of the cosmetic upgrade\
+boolean speedUpgraded;  // Flag to indicate if the player has purchased the speed upgrade\
+boolean cosmeticUpgraded;  // Flag to indicate if the player has purchased the cosmetic upgrade\
+\
+int laneWidth; // Width of each lane\
+int currentLane; // Player's current lane (0 for left, 1 for middle, 2 for right)\
+boolean canSwitchLane; // Flag to indicate if the player can switch lanes\
+\
+int laneSwitchCooldown = 10; // Shortened cooldown duration in frames\
+int laneSwitchDuration = 10; // Duration of lane-switching motion in frames\
+\
+float targetX; // Target X position for smooth lane switching\
+\
+float recyclableDropRate = 0.5; // Probability of generating recyclable rubbish\
+float nonRecyclableDropRate = 0.5; // Probability of generating non-recyclable rubbish\
+\
+float minRecyclableSpeed = 3.0;  // Minimum speed for recyclable rubbish\
+float maxRecyclableSpeed = 7.0;  // Maximum speed for recyclable rubbish\
+\
+float minNonRecyclableSpeed = 5.0;  // Minimum speed for non-recyclable rubbish\
+float maxNonRecyclableSpeed = 9.0;  // Maximum speed for non-recyclable rubbish\
+\
+int lives;  // Number of lives\
+\
+float heartSize = 35.0; // Adjust the size of the hearts\
+\
+PImage[] recyclableImages; // Array to store multiple recyclable images\
+PImage[] nonRecyclableImages; // Array to store multiple non-recyclable images\
+PImage backgroundImage;  // Background image\
+\
+int cosmetic1UpgradeCost;  // Cost of Cosmetic 1 upgrade\
+int cosmetic2UpgradeCost;  // Cost of Cosmetic 2 upgrade\
+int cosmetic3UpgradeCost;  // Cost of Cosmetic 3 upgrade\
+boolean cosmetic1Upgraded;  // Flag to indicate if Cosmetic 1 is purchased\
+boolean cosmetic2Upgraded;  // Flag to indicate if Cosmetic 2 is purchased\
+boolean cosmetic3Upgraded;  // Flag to indicate if Cosmetic 3 is purchased\
+\
+void setup() \{\
+  size(800, 600);\
+  laneWidth = width / 3;\
+  initializeGame();\
+\
+  // Load multiple recyclable images\
+  recyclableImages = new PImage[8]; // Change the size based on the number of images\
+  for (int i = 0; i < recyclableImages.length; i++) \{\
+    recyclableImages[i] = loadImage("r" + i + ".png");\
+  \}\
+\
+  // Load multiple non-recyclable images\
+  nonRecyclableImages = new PImage[8]; // Change the size based on the number of images\
+  for (int i = 0; i < nonRecyclableImages.length; i++) \{\
+    nonRecyclableImages[i] = loadImage("n" + i + ".png");\
+  \}\
+\
+  // Load background image\
+  backgroundImage = loadImage("background.png");\
+\
+  // Set the cosmetic upgrade costs\
+  cosmetic1UpgradeCost = 50;\
+  cosmetic2UpgradeCost = 75;\
+  cosmetic3UpgradeCost = 100;\
+\}\
+\
+\
+\
+void initializeGame() \{\
+  playerX = width / 2;\
+  playerY = height - 100;\
+  playerSpeed = 5.0;\
+  currency = 0;\
+  recyclableCount = 0;\
+  nonRecyclableCount = 0;\
+  gameTimer = 0;\
+  gameOver = false;\
+  rubbishList = new ArrayList<Rubbish>();\
+\
+  inShop = false;\
+  speedUpgradeCost = 30;\
+  cosmeticUpgradeCost = 50;\
+  speedUpgraded = false;\
+  cosmeticUpgraded = false;\
+\
+  // Start the player in the middle lane\
+  currentLane = 1;\
+  canSwitchLane = true;\
+  targetX = playerX;\
+\
+  lives = 3;  // Initialize with 3 lives\
+\}\
+\
+float backgroundScrollSpeed = 120.0; // Adjust the scrolling speed\
+\
+void draw() \{\
+  // Update the background position for motion\
+  float backgroundY = (millis() / 1000.0) * backgroundScrollSpeed % height;\
+  image(backgroundImage, 0, backgroundY - height, width, height);\
+  image(backgroundImage, 0, backgroundY, width, height);\
+\
+  if (!gameOver && !inShop) \{\
+    handlePlayer();\
+    handleRubbish();\
+    handleUI();\
+    gameTimer++;\
+  \} else if (inShop) \{\
+    handleShop();\
+  \} else \{\
+    displayGameOver();\
+  \}\
+\}\
+\
+float colorChangeSpeed = 0.1; // Adjust the speed of color change\
+\
+void handlePlayer() \{\
+  // Player movement\
+  if (keyPressed && keyCode == LEFT && currentLane > 0 && canSwitchLane) \{\
+    // Move left if not in the leftmost lane and can switch lane\
+    currentLane--;\
+    targetX = currentLane * laneWidth + laneWidth / 2;\
+    canSwitchLane = false;\
+  \}\
+  if (keyPressed && keyCode == RIGHT && currentLane < 2 && canSwitchLane) \{\
+    // Move right if not in the rightmost lane and can switch lane\
+    currentLane++;\
+    targetX = currentLane * laneWidth + laneWidth / 2;\
+    canSwitchLane = false;\
+  \}\
+\
+  // Interpolate player position for smooth lane switching\
+  playerX = (int) lerp(playerX, targetX, 0.2);\
+\
+  // Check if the 's' key is pressed to enter the shop\
+  if (keyPressed && key == 's') \{\
+    inShop = true;\
+  \}\
+\
+  // Update cosmetic upgrades\
+  if (keyPressed) \{\
+    if (key == '2' && currency >= cosmetic2UpgradeCost && !cosmetic2Upgraded) \{\
+      // Apply cosmetic upgrade 2 (dark green appearance)\
+      cosmetic2Upgraded = true;\
+      fill(0, 128, 0);\
+      currency -= cosmetic2UpgradeCost;\
+      // Increase game difficulty, e.g., increase rubbish speed\
+      minRecyclableSpeed = 4.0;\
+      maxRecyclableSpeed = 8.0;\
+    \} else if (key == '3' && currency >= cosmetic3UpgradeCost && !cosmetic3Upgraded) \{\
+      // Apply cosmetic upgrade 3 (multicolored appearance)\
+      cosmetic3Upgraded = true;\
+      currency -= cosmetic3UpgradeCost;\
+      // Increase game difficulty further\
+      minNonRecyclableSpeed = 6.0;\
+      maxNonRecyclableSpeed = 10.0;\
+    \}\
+  \}\
+\
+  // Draw the player\
+  if (cosmetic3Upgraded) \{\
+    // Multicolored appearance for the third cosmetic upgrade\
+    float rainbowColor = millis() * colorChangeSpeed;\
+    fill((rainbowColor % 256), ((rainbowColor + 85) % 256), ((rainbowColor + 170) % 256));\
+  \} else if (cosmetic2Upgraded) \{\
+    // Dark green appearance for the second cosmetic upgrade\
+    fill(0, 128, 0);\
+  \} else if (cosmetic1Upgraded) \{\
+    // Light green appearance for the first cosmetic upgrade\
+    fill(144, 238, 144);\
+  \} else \{\
+    // White appearance at the start and default state\
+    fill(255);\
+  \}\
+\
+  ellipse(playerX, playerY, 30, 30);\
+\
+  // Check if the lane switch cooldown is over\
+  if (!canSwitchLane) \{\
+    laneSwitchCooldown--;\
+    if (laneSwitchCooldown <= 0) \{\
+      canSwitchLane = true;\
+      laneSwitchCooldown = 10; // Reset cooldown duration\
+    \}\
+  \}\
+\}\
+\
+\
+void handleRubbish() \{\
+  // Randomly generate rubbish in the center of each lane based on drop rates\
+  if (frameCount % 30 == 0) \{\
+    int lane = int(random(3));  // 0 for left lane, 1 for middle lane, 2 for right lane\
+    float rubbishX = lane * laneWidth + laneWidth / 2;\
+    float rubbishY = 0;\
+\
+    // Adjust the position to prevent overlapping\
+    while (checkRubbishOverlap(rubbishX, rubbishY)) \{\
+      rubbishX = lane * laneWidth + laneWidth / 2;\
+    \}\
+\
+    // Decide the type of rubbish based on drop rates\
+    int rubbishType = random(1) < recyclableDropRate ? 0 : 1;  // 0 for recyclable, 1 for non-recyclable\
+\
+    // Decide the speed of rubbish based on type\
+    float rubbishSpeed;\
+    if (rubbishType == 0) \{\
+      rubbishSpeed = random(minRecyclableSpeed, maxRecyclableSpeed);\
+    \} else \{\
+      rubbishSpeed = random(minNonRecyclableSpeed, maxNonRecyclableSpeed);\
+    \}\
+\
+    Rubbish rubbish = new Rubbish(rubbishX, rubbishY, rubbishType, rubbishSpeed, recyclableImages, nonRecyclableImages);\
+    rubbishList.add(rubbish);\
+  \}\
+\
+  // Move and draw the rubbish\
+  for (int i = rubbishList.size() - 1; i >= 0; i--) \{\
+    Rubbish rubbish = rubbishList.get(i);\
+    rubbish.move();\
+    rubbish.display();\
+    \
+    // Check if the rubbish is collected by the player\
+    if (dist(rubbish.x, rubbish.y, playerX, playerY) < 15) \{\
+      if (rubbish.type == 0) \{\
+        currency += 10;  // Reward for collecting recyclable rubbish\
+        recyclableCount++;\
+      \} else \{\
+        currency -= 5;   // Penalty for collecting non-recyclable rubbish\
+        nonRecyclableCount++;\
+\
+        // Decrease lives and check if the player is out of lives\
+        lives--;\
+        if (lives <= 0) \{\
+          gameOver = true;\
+        \}\
+      \}\
+      rubbishList.remove(i);\
+    \}\
+\
+    // Remove rubbish when it goes off the screen\
+    if (rubbish.y > height) \{\
+      rubbishList.remove(i);\
+    \}\
+  \}\
+\}\
+\
+boolean checkRubbishOverlap(float x, float y) \{\
+  // Check if the new rubbish overlaps with existing rubbish\
+  for (Rubbish rubbish : rubbishList) \{\
+    float distance = dist(x, y, rubbish.x, rubbish.y);\
+    if (distance < 30) \{ // Adjust this value based on the size of your rubbish\
+      return true; // Overlapping\
+    \}\
+  \}\
+  return false; // Not overlapping\
+\}\
+\
+void handleUI() \{\
+  // Display currency counter\
+  fill(0);\
+  textSize(20);\
+\
+  // Apply stroke settings before drawing text\
+  stroke(255);\
+  strokeWeight(3);\
+  text("Currency: " + currency, 20, 30);\
+  noStroke();  // Reset stroke settings after drawing text\
+\
+  // Display timer\
+  fill(0);\
+  textSize(20);\
+  stroke(255);\
+  strokeWeight(3);\
+  text("Time: " + gameTimer, width - 150, 30);\
+  noStroke();\
+\
+  // Display rubbish counters\
+  fill(0);\
+  textSize(20);\
+  stroke(255);\
+  strokeWeight(3);\
+  text("Recyclable: " + recyclableCount, 20, height - 30);\
+  text("Non-recyclable: " + nonRecyclableCount, width - 150, height - 30);\
+  noStroke();\
+\
+  // Display shop entry prompt\
+  fill(0);\
+  textSize(20);\
+  stroke(255);\
+  strokeWeight(3);\
+  text("Press 's' to enter the shop", width / 2 - 120, height - 30);\
+  noStroke();\
+\
+  // Display lives as hearts\
+  for (int i = 0; i < lives; i++) \{\
+    fill(255, 0, 0); // Red color\
+    drawHeart(30 + i * 40, 60, heartSize);\
+  \}\
+\}\
+\
+//Got heart code from the Processing website forums\
+void drawHeart(float x, float y, float size) \{\
+  float halfSize = size / 2;\
+\
+  beginShape();\
+  vertex(x, y - halfSize / 2);\
+  bezierVertex(x, y - halfSize, x + halfSize, y - halfSize / 2, x, y + halfSize / 2);\
+  vertex(x, y - halfSize / 2);\
+  bezierVertex(x, y - halfSize, x - halfSize, y - halfSize / 2, x, y + halfSize / 2);\
+  endShape();\
+\}\
+\
+void handleShop() \{\
+  background(200);\
+  fill(0, 0, 0); \
+  textSize(30);\
+  text("Upgrade Shop", width / 2 - 100, 50);\
+\
+  textSize(20);\
+\
+  // Display player's currency in the shop\
+ \
+  text("Currency: " + currency, width / 2 - 60, 100);\
+ \
+  // Display available upgrades based on progression\
+  if (!cosmetic1Upgraded) \{\
+    // Upgrade 1: Cosmetic 1 (Grey)\
+    drawUpgradeOption("Cosmetic 1", cosmetic1UpgradeCost, 169, 169, 169, 1);\
+    if (currency >= cosmetic1UpgradeCost && keyPressed && key == '1') \{\
+      // Apply Cosmetic 1 upgrade\
+      cosmetic1Upgraded = true;\
+      currency -= cosmetic1UpgradeCost;\
+    \}\
+  \} else if (!cosmetic2Upgraded) \{\
+    // Upgrade 2: Cosmetic 2 (Dark Green)\
+    drawUpgradeOption("Cosmetic 2", cosmetic2UpgradeCost, 0, 128, 0, 2);\
+    if (currency >= cosmetic2UpgradeCost && keyPressed && key == '2') \{\
+      // Apply Cosmetic 2 upgrade\
+      cosmetic2Upgraded = true;\
+      currency -= cosmetic2UpgradeCost;\
+    \}\
+  \} else if (!cosmetic3Upgraded) \{\
+    // Upgrade 3: Cosmetic 3 (Rainbow)\
+    drawUpgradeOption("Cosmetic 3", cosmetic3UpgradeCost, millis(), millis() + 85, millis() + 170, 3);\
+    if (currency >= cosmetic3UpgradeCost && keyPressed && key == '3') \{\
+      // Apply Cosmetic 3 upgrade\
+      cosmetic3Upgraded = true;\
+      currency -= cosmetic3UpgradeCost;\
+    \}\
+  \}\
+\
+  // Back button\
+  fill(0, 0, 0); // Set fill color to black for the "Press 'b' to leave the shop" text\
+  text("Press 'b' to leave the shop", width / 2 - 120, height - 30);\
+\
+  // Check for 'b' key press to leave the shop\
+  if (keyPressed && key == 'b') \{\
+    inShop = false;\
+  \}\
+\}\
+\
+\
+void drawUpgradeOption(String label, int cost, int r, int g, int b, int optionNumber) \{\
+  float optionX = width / 2 - 200;\
+  float optionY = 150 + (optionNumber - 1) * 100;\
+\
+  // Draw background rectangle\
+  fill(r, g, b);\
+  rect(optionX, optionY, 400, 80, 10);\
+\
+  // Draw label and cost\
+  fill(0); // Set text color to black\
+  textAlign(LEFT, CENTER);\
+  text(label + ": " + cost + " currency", optionX + 20, optionY + 40);\
+\
+  // Draw color indicator rectangle\
+  float indicatorX = optionX + 350;\
+  float indicatorY = optionY + 20;\
+\
+  // Rainbow effect for Cosmetic 3 only\
+  if (optionNumber == 3) \{\
+    int rainbowColor = (int) (millis() * colorChangeSpeed);\
+    fill((rainbowColor % 255), ((rainbowColor + 85) % 255), ((rainbowColor + 170) % 255));\
+  \} else \{\
+    // Set color for Upgrade 1 to light green\
+    fill(144, 238, 144);\
+  \}\
+  rect(indicatorX, indicatorY, 20, 40);\
+\
+  // Draw label and cost\
+  fill(0); // Set text color to black\
+  textAlign(LEFT, CENTER);\
+  text(label + ": " + cost + " currency", optionX + 20, optionY + 40);\
+\
+  // Draw upgrade prompt if available\
+  noFill();\
+  if (currency >= cost) \{\
+    fill(0); // Set text color to black\
+    textAlign(LEFT, CENTER);\
+    text("Press '" + optionNumber + "' to buy", optionX + 20, optionY + 60);\
+    noFill();\
+  \}\
+\}\
+\
+void displayGameOver() \{\
+  fill(0);\
+  textSize(40);\
+  text("Game Over", width / 2 - 100, height / 2 - 20);\
+  textSize(20);\
+  text("Final Score: " + currency, width / 2 - 70, height / 2 + 20);\
+\}\
+\
+class Rubbish \{\
+  float x, y;\
+  int type;\
+  float speed;\
+  float rotation; // Rotation angle for spinning\
+  PImage recyclableImage; // Single recyclable image\
+  PImage nonRecyclableImage; // Single non-recyclable image\
+\
+  Rubbish(float x, float y, int type, float speed, PImage[] recyclableImages, PImage[] nonRecyclableImages) \{\
+    this.x = x;\
+    this.y = y;\
+    this.type = type;\
+    this.speed = speed;\
+    this.rotation = 0;\
+\
+    // Use a random image index for each type of rubbish during creation\
+    if (type == 0) \{\
+      int index = (int) random(recyclableImages.length);\
+      this.recyclableImage = recyclableImages[index];\
+    \} else \{\
+      int index = (int) random(nonRecyclableImages.length);\
+      this.nonRecyclableImage = nonRecyclableImages[index];\
+    \}\
+  \}\
+\
+  void move() \{\
+    y += speed;\
+  \}\
+\
+  void display() \{\
+    pushMatrix();\
+    translate(x, y);\
+    rotate(rotation);\
+\
+    // Draw recyclable image or non-recyclable image\
+    if (type == 0) \{\
+      image(recyclableImage, -25, -25, 50, 50);\
+    \} else \{\
+      image(nonRecyclableImage, -25, -25, 50, 50);\
+    \}\
+\
+    popMatrix();\
+\
+    // Update rotation for spinning effect\
+    rotation += 0.1;\
+  \}\
+\}}
